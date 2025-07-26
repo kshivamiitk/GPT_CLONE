@@ -15,51 +15,63 @@ export default function HomePage() {
             const { data } = await supabase.auth.getSession();
             setUser(data?.session?.user ?? null);
         };
-
         getSession();
-
         const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
             setUser(session?.user ?? null);
         });
-
-        return () => {
-            listener.subscription.unsubscribe();
-        };
+        return () => listener.subscription.unsubscribe();
     }, []);
 
     // Handle signup
+    // pages/index.tsx (inside HomePage component)
     const handleSignUp = async () => {
-        const { error } = await supabase.auth.signUp({ email, password });
-        if (error) alert(error.message);
+        // 1) Sign up with Supabase Auth
+        const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+        if (authError) {
+            alert('Sign up error: ' + authError.message);
+            return;
+        }
+
+        // 2) Immediately insert a profile row for this user
+        const userId = authData.user?.id;
+        if (userId) {
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .insert([{ id: userId, email }]);
+            if (profileError) {
+                console.error('Error inserting profile:', profileError);
+            }
+        }
+
+        alert('Check your email to confirm your account!');
     };
+
 
     // Handle login
     const handleSignIn = async () => {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) alert(error.message);
+        if (error) alert('Sign in error: ' + error.message);
     };
 
     // Handle anonymous login
     const handleAnonLogin = async () => {
         const { error } = await supabase.auth.signInAnonymously();
-        if (error) alert(error.message);
+        if (error) alert('Anonymous login error: ' + error.message);
     };
 
     // Handle logout
     const handleSignOut = async () => {
-        await supabase.auth.signOut();
+        const { error } = await supabase.auth.signOut();
+        if (error) alert('Logout error: ' + error.message);
         setMessages([]);
     };
 
-    // Send message to OpenAI API
+    // Send message to API
     const sendMessage = async () => {
-        if (input.trim() === '') return;
-
-        // Add user message to chat
+        if (!input.trim()) return;
         setMessages(prev => [...prev, { role: 'user', content: input }]);
         const msg = input;
         setInput('');
-
         try {
             const res = await fetch('/api/chat', {
                 method: 'POST',
@@ -67,7 +79,6 @@ export default function HomePage() {
                 body: JSON.stringify({ message: msg }),
             });
             const data = await res.json();
-
             if (data.reply) {
                 setMessages(prev => [...prev, { role: 'assistant', content: data.reply }]);
             }
@@ -79,27 +90,46 @@ export default function HomePage() {
     // If not logged in, show login form
     if (!user) {
         return (
-            <div style={{ maxWidth: 400, margin: '50px auto', fontFamily: 'sans-serif' }}>
+            <div
+                style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    width: '100vw',
+                    height: '100vh',
+                    padding: '20px',
+                    boxSizing: 'border-box',
+                    background: '#f5f5f5',
+                }}
+            >
                 <h2>Login or Sign Up</h2>
                 <input
                     type="email"
                     placeholder="Email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
-                    style={{ width: '100%', marginBottom: '8px', padding: '8px' }}
+                    style={{ width: '100%', maxWidth: 400, margin: '8px 0', padding: '10px' }}
                 />
                 <input
                     type="password"
                     placeholder="Password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    style={{ width: '100%', marginBottom: '8px', padding: '8px' }}
+                    style={{ width: '100%', maxWidth: 400, margin: '8px 0', padding: '10px' }}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <button onClick={handleSignUp} style={{ width: '48%' }}>Sign Up</button>
-                    <button onClick={handleSignIn} style={{ width: '48%' }}>Sign In</button>
+                <div style={{ display: 'flex', gap: '10px', margin: '8px 0' }}>
+                    <button onClick={handleSignUp} style={{ flex: 1, padding: '10px' }}>
+                        Sign Up
+                    </button>
+                    <button onClick={handleSignIn} style={{ flex: 1, padding: '10px' }}>
+                        Sign In
+                    </button>
                 </div>
-                <button onClick={handleAnonLogin} style={{ width: '100%', marginTop: '10px' }}>
+                <button
+                    onClick={handleAnonLogin}
+                    style={{ width: '100%', maxWidth: 400, marginTop: '10px', padding: '10px' }}
+                >
                     Continue as Guest
                 </button>
             </div>
@@ -108,34 +138,86 @@ export default function HomePage() {
 
     // If logged in, show chat interface
     return (
-        <div style={{ maxWidth: 600, margin: '50px auto', fontFamily: 'sans-serif' }}>
-            <h2>Chat with GPT</h2>
-            <button onClick={handleSignOut} style={{ marginBottom: '20px' }}>Log Out</button>
+        <div
+            style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: '100vh',
+                width: '100vw',
+                boxSizing: 'border-box',
+            }}
+        >
+            <header
+                style={{
+                    padding: '10px 20px',
+                    borderBottom: '1px solid #ddd',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#fafafa',
+                }}
+            >
+                <h2>Chat with GPT</h2>
+                <button onClick={handleSignOut} style={{ padding: '8px 12px' }}>
+                    Log Out
+                </button>
+            </header>
 
-            <div style={{ marginBottom: '20px', height: '300px', overflowY: 'auto', border: '1px solid #ccc', padding: '10px' }}>
+            <main
+                style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    padding: '20px',
+                    background: '#fff',
+                }}
+            >
                 {messages.map((msg, idx) => (
-                    <div key={idx} style={{ marginBottom: '10px' }}>
+                    <div key={idx} style={{ marginBottom: '16px' }}>
                         <strong>{msg.role === 'user' ? 'You:' : 'AI:'}</strong>
-                        <div style={{
-                            background: msg.role === 'user' ? '#eef' : '#fee',
-                            padding: '8px',
-                            borderRadius: '4px',
-                            whiteSpace: 'pre-wrap'
-                        }}>
+                        <div
+                            style={{
+                                background: msg.role === 'user' ? '#eef' : '#fee',
+                                padding: '12px',
+                                borderRadius: '6px',
+                                whiteSpace: 'pre-wrap',
+                                marginTop: '4px',
+                            }}
+                        >
                             <ReactMarkdown>{msg.content}</ReactMarkdown>
                         </div>
                     </div>
                 ))}
-            </div>
+            </main>
 
-            <textarea
-                rows={3}
-                placeholder="Type your message..."
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                style={{ width: '100%', marginBottom: '8px', padding: '8px' }}
-            />
-            <button onClick={sendMessage} style={{ width: '100%' }}>Send</button>
+            <footer
+                style={{
+                    padding: '10px 20px',
+                    borderTop: '1px solid #ddd',
+                    background: '#fafafa',
+                }}
+            >
+        <textarea
+            rows={2}
+            placeholder="Type your message..."
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            style={{ width: '100%', padding: '10px', boxSizing: 'border-box' }}
+        />
+                <button
+                    onClick={sendMessage}
+                    style={{
+                        marginTop: '8px',
+                        width: '100%',
+                        padding: '12px',
+                        background: '#0070f3',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '4px',
+                    }}
+                >
+                    Send
+                </button>
+            </footer>
         </div>
     );
 }
