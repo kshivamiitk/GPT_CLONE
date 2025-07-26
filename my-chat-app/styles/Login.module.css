@@ -1,0 +1,37 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 100vw;
+    height: 100vh;
+    padding: 20px;
+    background: #f5f5f5;
+    box-sizing: border-box;
+}
+.input {
+    width: 100%;
+    max-width: 400px;
+    margin: 8px 0;
+    padding: 10px;
+    box-sizing: border-box;
+}
+.buttonRow {
+    display: flex;
+    gap: 10px;
+    margin: 8px 0;
+    width: 100%;
+    max-width: 400px;
+}
+.button {
+    flex: 1;
+    padding: 10px;
+    cursor: pointer;
+}
+.guestButton {
+    width: 100%;
+    max-width: 400px;
+    padding: 10px;
+    margin-top: 10px;
+    cursor: pointer;
+}

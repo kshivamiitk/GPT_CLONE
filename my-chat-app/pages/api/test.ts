@@ -1,8 +1,11 @@
-// pages/api/test.ts
+// pages/api/test.mts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAI({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1'
+});
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     try {
