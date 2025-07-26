@@ -1,11 +1,8 @@
-// pages/index.tsx
-
 import { useState, useEffect, useRef } from 'react';
-import ReactMarkdown from 'react-markdown';
 import { supabase } from '../lib/supabase';
 import chatStyles from '../styles/Chat.module.css';
 import loginStyles from '../styles/Login.module.css';
-import {ChatBubble} from "../components/ChatBubble";
+import { ChatBubble } from '../components/ChatBubble';
 
 type Message = {
     role: 'user' | 'assistant';
@@ -21,7 +18,7 @@ export default function HomePage() {
     const [messages, setMessages] = useState<Message[]>([]);
 
     const bottomRef = useRef<HTMLDivElement>(null);
-    // Auth session & history load
+
     useEffect(() => {
         const getSession = async () => {
             const { data } = await supabase.auth.getSession();
@@ -41,14 +38,18 @@ export default function HomePage() {
             try {
                 const res = await fetch(`/api/history?user_id=${user.id}`);
                 const { history } = await res.json();
-                setMessages(history);
+                if (Array.isArray(history)) {
+                    setMessages(history);
+                } else {
+                    console.warn('History not in expected format:', history);
+                    setMessages([]);
+                }
             } catch (err) {
-                console.error('Failed to load history', err);
+                console.error('Failed to load history:', err);
             }
         })();
     }, [user]);
 
-    // Handlers
     const handleSignUp = async () => {
         const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
         if (authError) return alert('Sign up error: ' + authError.message);
@@ -79,24 +80,29 @@ export default function HomePage() {
 
     const sendMessage = async () => {
         if (!input.trim()) return;
-        setMessages(prev => [...prev, { role: 'user', content: input }]);
-        const msg = input;
+
+        setMessages(prev => [...prev, { role: 'user', content: input, created_at: new Date().toISOString() }]);
+
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id, message: input }),
+        });
+
         setInput('');
 
-        try {
-            const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: msg, user_id: user.id }),
-            });
-            const { reply } = await res.json();
-            if (reply) setMessages(prev => [...prev, { role: 'assistant', content: reply }]);
-        } catch (err) {
-            console.error('Error sending message:', err);
+        if (!res.ok) {
+            console.error(await res.text());
+            return;
         }
+
+        const data = await res.json();
+        setMessages(prev => [
+            ...prev,
+            { role: 'assistant', content: data.reply, created_at: new Date().toISOString() },
+        ]);
     };
 
-    // Render
     if (!user) {
         return (
             <div className={loginStyles.container}>
@@ -133,17 +139,18 @@ export default function HomePage() {
     return (
         <div className={chatStyles.container}>
             <header className={chatStyles.header}>
-                <h2>Chat with AI</h2>
+                <h2>ChatBot Pro</h2>
                 <button onClick={handleSignOut} className={chatStyles.logoutButton}>
                     Log Out
                 </button>
             </header>
 
             <main className={chatStyles.main}>
-                {messages.map((msg, idx) => (
-                    <ChatBubble message={msg} key={idx} />
-                ))}
-                <div ref={bottomRef}/>
+                {Array.isArray(messages) &&
+                    messages.map((msg, idx) => (
+                        <ChatBubble message={msg} key={idx} />
+                    ))}
+                <div ref={bottomRef} />
             </main>
 
             <footer className={chatStyles.footer}>
