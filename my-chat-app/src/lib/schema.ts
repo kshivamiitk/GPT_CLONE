@@ -1,6 +1,5 @@
 import {pgTable, serial , uuid, text , varchar, timestamp} from "drizzle-orm/pg-core";
 
-
 export const messages = pgTable('messages', {
     id: serial('id').primaryKey(),
     user_id: uuid('user_id'),

@@ -1,8 +1,10 @@
+// pages/index.tsx
 import { useState, useEffect, useRef } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '@/lib/supabase';
 import chatStyles from '../styles/Chat.module.css';
 import loginStyles from '../styles/Login.module.css';
-import { ChatBubble } from '../components/ChatBubble';
+import { ChatBubble } from '@/components/ChatBubble';
+import {checkSessionOnMount, fetchChatHistory} from "@/Utils/CommonUtils";
 
 type Message = {
     role: 'user' | 'assistant';
@@ -14,44 +16,31 @@ export default function HomePage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
 
     const bottomRef = useRef<HTMLDivElement>(null);
 
+    // 🔁 Check session on mount
     useEffect(() => {
-        const getSession = async () => {
-            const { data } = await supabase.auth.getSession();
-            setUser(data?.session?.user ?? null);
-        };
-        getSession();
-
-        const { data: listener } = supabase.auth.onAuthStateChange((_, session) => {
-            setUser(session?.user ?? null);
-        });
-        return () => listener.subscription.unsubscribe();
+        const cleanup = checkSessionOnMount(setUser, setLoading);
+        return cleanup;
     }, []);
 
+    // 🔁 Load chat history once user is known
     useEffect(() => {
         if (!user) return;
-        (async () => {
-            try {
-                const res = await fetch(`/api/history?user_id=${user.id}`);
-                const { history } = await res.json();
-                if (Array.isArray(history)) {
-                    setMessages(history);
-                } else {
-                    console.warn('History not in expected format:', history);
-                    setMessages([]);
-                }
-            } catch (err) {
-                console.error('Failed to load history:', err);
-            }
-        })();
+        fetchChatHistory(user.id, setMessages);
     }, [user]);
+
+    useEffect(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [messages]);
 
     const handleSignUp = async () => {
         const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
+
         if (authError) return alert('Sign up error: ' + authError.message);
 
         const userId = authData.user?.id;
@@ -80,7 +69,6 @@ export default function HomePage() {
 
     const sendMessage = async () => {
         if (!input.trim()) return;
-
         setMessages(prev => [...prev, { role: 'user', content: input, created_at: new Date().toISOString() }]);
 
         const res = await fetch('/api/chat', {
@@ -103,6 +91,12 @@ export default function HomePage() {
         ]);
     };
 
+    // 🟡 Wait for session check to complete
+    if (loading) {
+        return <div className={loginStyles.container}>Loading session...</div>;
+    }
+
+    // 🟢 Show login screen only when confirmed user is null
     if (!user) {
         return (
             <div className={loginStyles.container}>
@@ -154,13 +148,13 @@ export default function HomePage() {
             </main>
 
             <footer className={chatStyles.footer}>
-        <textarea
-            rows={2}
-            placeholder="Type your message..."
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            className={chatStyles.textarea}
-        />
+                <textarea
+                    rows={2}
+                    placeholder="Type your message..."
+                    value={input}
+                    onChange={e => setInput(e.target.value)}
+                    className={chatStyles.textarea}
+                />
                 <button onClick={sendMessage} className={chatStyles.sendButton}>
                     Send
                 </button>

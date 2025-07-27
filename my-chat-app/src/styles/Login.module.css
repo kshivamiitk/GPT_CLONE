@@ -6,7 +6,7 @@
     width: 100vw;
     height: 100vh;
     padding: 20px;
-    background: #f5f5f5;
+    background: white;
     box-sizing: border-box;
 }
 .input {
@@ -17,6 +17,7 @@
     box-sizing: border-box;
 }
 .buttonRow {
+
     display: flex;
     gap: 10px;
     margin: 8px 0;
@@ -24,14 +25,19 @@
     max-width: 400px;
 }
 .button {
+    color: white;
+    background-color: #0070f3;
     flex: 1;
     padding: 10px;
     cursor: pointer;
 }
+
 .guestButton {
+    color: white;
     width: 100%;
     max-width: 400px;
     padding: 10px;
     margin-top: 10px;
+    background-color: #0070f3;
     cursor: pointer;
 }
