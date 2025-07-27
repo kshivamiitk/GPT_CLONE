@@ -1,10 +1,11 @@
-// pages/index.tsx
+// src/pages/index.tsx
 import { useState, useEffect, useRef } from 'react';
+import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import chatStyles from '../styles/Chat.module.css';
 import loginStyles from '../styles/Login.module.css';
 import { ChatBubble } from '@/components/ChatBubble';
-import {checkSessionOnMount, fetchChatHistory} from "@/Utils/CommonUtils";
+import { checkSessionOnMount, fetchChatHistory } from '@/Utils/CommonUtils';
 
 type Message = {
     role: 'user' | 'assistant';
@@ -15,24 +16,23 @@ type Message = {
 export default function HomePage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [user, setUser] = useState<any>(null);
+    // Now storing the full Supabase Session so its setter matches checkSessionOnMount
+    const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<Message[]>([]);
 
     const bottomRef = useRef<HTMLDivElement>(null);
 
-    // 🔁 Check session on mount
     useEffect(() => {
-        const cleanup = checkSessionOnMount(setUser, setLoading);
+        const cleanup = checkSessionOnMount(setSession, setLoading);
         return cleanup;
     }, []);
 
-    // 🔁 Load chat history once user is known
     useEffect(() => {
-        if (!user) return;
-        fetchChatHistory(user.id, setMessages);
-    }, [user]);
+        if (!session) return;
+        fetchChatHistory(session.user.id, setMessages);
+    }, [session]);
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -40,7 +40,6 @@ export default function HomePage() {
 
     const handleSignUp = async () => {
         const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
-
         if (authError) return alert('Sign up error: ' + authError.message);
 
         const userId = authData.user?.id;
@@ -69,35 +68,36 @@ export default function HomePage() {
 
     const sendMessage = async () => {
         if (!input.trim()) return;
-        setMessages(prev => [...prev, { role: 'user', content: input, created_at: new Date().toISOString() }]);
+
+        setMessages((prev) => [
+            ...prev,
+            { role: 'user', content: input, created_at: new Date().toISOString() },
+        ]);
 
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: user.id, message: input }),
+            body: JSON.stringify({ user_id: session!.user.id, message: input }),
         });
-
         setInput('');
 
         if (!res.ok) {
-            console.error(await res.text());
+            console.error('Chat API error:', await res.text());
             return;
         }
 
-        const data = await res.json();
-        setMessages(prev => [
+        const { reply } = await res.json();
+        setMessages((prev) => [
             ...prev,
-            { role: 'assistant', content: data.reply, created_at: new Date().toISOString() },
+            { role: 'assistant', content: reply, created_at: new Date().toISOString() },
         ]);
     };
 
-    // 🟡 Wait for session check to complete
     if (loading) {
         return <div className={loginStyles.container}>Loading session...</div>;
     }
 
-    // 🟢 Show login screen only when confirmed user is null
-    if (!user) {
+    if (!session) {
         return (
             <div className={loginStyles.container}>
                 <h2>Login or Sign Up</h2>
@@ -105,14 +105,14 @@ export default function HomePage() {
                     type="email"
                     placeholder="Email"
                     value={email}
-                    onChange={e => setEmail(e.target.value)}
+                    onChange={(e) => setEmail(e.target.value)}
                     className={loginStyles.input}
                 />
                 <input
                     type="password"
                     placeholder="Password"
                     value={password}
-                    onChange={e => setPassword(e.target.value)}
+                    onChange={(e) => setPassword(e.target.value)}
                     className={loginStyles.input}
                 />
                 <div className={loginStyles.buttonRow}>
@@ -140,21 +140,20 @@ export default function HomePage() {
             </header>
 
             <main className={chatStyles.main}>
-                {Array.isArray(messages) &&
-                    messages.map((msg, idx) => (
-                        <ChatBubble message={msg} key={idx} />
-                    ))}
+                {messages.map((msg, idx) => (
+                    <ChatBubble message={msg} key={idx} />
+                ))}
                 <div ref={bottomRef} />
             </main>
 
             <footer className={chatStyles.footer}>
-                <textarea
-                    rows={2}
-                    placeholder="Type your message..."
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    className={chatStyles.textarea}
-                />
+        <textarea
+            rows={2}
+            placeholder="Type your message..."
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            className={chatStyles.textarea}
+        />
                 <button onClick={sendMessage} className={chatStyles.sendButton}>
                     Send
                 </button>

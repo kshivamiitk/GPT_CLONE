@@ -1,6 +1,5 @@
-import {useEffect} from "react";
-import {supabase} from "@/lib/supabase";
-import { User } from "@supabase/supabase-js";
+import { supabase } from '@/lib/supabase';
+import type { Session } from '@supabase/supabase-js';
 
 export type Message = {
     role: 'user' | 'assistant';
@@ -9,35 +8,35 @@ export type Message = {
 };
 
 export function getTime(message: Message) {
-    const time = message.created_at
+    return message.created_at
         ? new Date(message.created_at).toLocaleTimeString()
         : new Date().toLocaleTimeString();
-    return time;
 }
 
 export function checkSessionOnMount(
-    setUser: (user: User | null) => void,
+    setSession: (session: Session | null) => void,
     setLoading: (loading: boolean) => void
 ): () => void {
     supabase.auth.getSession().then(({ data, error }) => {
-        if (error) {
-            console.error('Failed to get session:', error);
-        }
-        setUser(data?.session?.user ?? null);
+        if (error) console.error('Failed to get session:', error);
+        setSession(data.session ?? null);
         setLoading(false);
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-        setUser(session?.user ?? null);
+        setSession(session ?? null);
         setLoading(false);
     });
 
     return () => {
-        listener?.subscription?.unsubscribe?.(); // for safety
+        listener?.subscription?.unsubscribe?.();
     };
 }
 
-export async function fetchChatHistory(userId: string, setMessages: (messages: any[]) => void) {
+export async function fetchChatHistory(
+    userId: string,
+    setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+) {
     try {
         const res = await fetch(`/api/history?user_id=${userId}`);
         const { history } = await res.json();

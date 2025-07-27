@@ -36,7 +36,7 @@ export default async function handler(
         await supabaseAdmin.from('messages').insert([{user_id, role: 'assistant', content: reply}]);
 
         return res.status(200).json({ reply });
-    } catch (error: any) {
+    } catch (error) {
         console.error('OpenAI API error:', error);
         return res.status(500).json({ error: 'OpenAI API request failed' });
     }
