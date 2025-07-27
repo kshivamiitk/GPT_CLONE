@@ -1,4 +1,3 @@
-// src/pages/index.tsx
 import { useState, useEffect, useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
@@ -6,17 +5,11 @@ import chatStyles from '../styles/Chat.module.css';
 import loginStyles from '../styles/Login.module.css';
 import { ChatBubble } from '@/components/ChatBubble';
 import { checkSessionOnMount, fetchChatHistory } from '@/Utils/CommonUtils';
-
-type Message = {
-    role: 'user' | 'assistant';
-    content: string;
-    created_at?: string;
-};
+import type { Message } from '@/Utils/CommonUtils';
 
 export default function HomePage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    // Now storing the full Supabase Session so its setter matches checkSessionOnMount
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
     const [input, setInput] = useState('');
@@ -24,28 +17,34 @@ export default function HomePage() {
 
     const bottomRef = useRef<HTMLDivElement>(null);
 
+    // 🔁 Check session on mount
     useEffect(() => {
         const cleanup = checkSessionOnMount(setSession, setLoading);
         return cleanup;
     }, []);
 
+    // 🔁 Load chat history once we have a session
     useEffect(() => {
-        if (!session) return;
-        fetchChatHistory(session.user.id, setMessages);
+        if (session) {
+            fetchChatHistory(session.user.id, setMessages);
+        }
     }, [session]);
 
+    // Scroll to bottom whenever messages change
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
 
     const handleSignUp = async () => {
-        const { data: authData, error: authError } = await supabase.auth.signUp({ email, password });
-        if (authError) return alert('Sign up error: ' + authError.message);
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) return alert('Sign up error: ' + error.message);
 
-        const userId = authData.user?.id;
+        const userId = data.user?.id;
         if (userId) {
-            const { error: profileError } = await supabase.from('profiles').insert([{ id: userId, email }]);
-            if (profileError) console.error('Error inserting profile:', profileError);
+            const { error: profileError } = await supabase.from('profiles').insert([
+                { id: userId, email },
+            ]);
+            if (profileError) console.error(profileError);
         }
         alert('Check your email to confirm your account!');
     };
@@ -61,14 +60,14 @@ export default function HomePage() {
     };
 
     const handleSignOut = async () => {
-        const { error } = await supabase.auth.signOut();
-        if (error) alert('Logout error: ' + error.message);
+        await supabase.auth.signOut();
         setMessages([]);
     };
 
     const sendMessage = async () => {
-        if (!input.trim()) return;
+        if (!input.trim() || !session) return;
 
+        // Optimistically add the user message
         setMessages((prev) => [
             ...prev,
             { role: 'user', content: input, created_at: new Date().toISOString() },
@@ -77,7 +76,7 @@ export default function HomePage() {
         const res = await fetch('/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: session!.user.id, message: input }),
+            body: JSON.stringify({ user_id: session.user.id, message: input }),
         });
         setInput('');
 
@@ -85,8 +84,7 @@ export default function HomePage() {
             console.error('Chat API error:', await res.text());
             return;
         }
-
-        const { reply } = await res.json();
+        const { reply }: { reply: string } = await res.json();
         setMessages((prev) => [
             ...prev,
             { role: 'assistant', content: reply, created_at: new Date().toISOString() },
